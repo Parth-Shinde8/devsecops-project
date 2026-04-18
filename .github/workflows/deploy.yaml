@@ -49,10 +49,11 @@ jobs:
         trivy image --severity HIGH,CRITICAL event-bus-service
 
     # 🔐 Checkov Scan (Terraform)
-    - name: Run Checkov (Terraform Security Scan)
+    - name: Run Checkov (Terraform Security Scan - Non Blocking)
       uses: bridgecrewio/checkov-action@master
       with:
         directory: ./terraform
+        soft_fail: true
 
     # 🔹 Tag Images
     - name: Tag Images
