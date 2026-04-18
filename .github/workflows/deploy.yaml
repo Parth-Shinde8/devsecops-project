@@ -1,4 +1,4 @@
-name: CI-CD Pipeline
+name: CI-CD DevSecOps Pipeline
 
 on:
   push:
@@ -6,40 +6,65 @@ on:
       - main
 
 jobs:
-  build-and-deploy:
+  build-scan-deploy:
     runs-on: ubuntu-latest
 
     steps:
 
+    # 🔹 1. Checkout
     - name: Checkout code
       uses: actions/checkout@v3
 
+    # 🔹 2. Docker Login
     - name: Docker Login
       uses: docker/login-action@v2
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
 
-    - name: Build & Push Posts
+    # 🔹 3. Install Trivy
+    - name: Install Trivy
       run: |
-        docker build -t ${{ secrets.DOCKER_USERNAME }}/posts-service ./services/posts
+        sudo apt-get update
+        sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+        echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee /etc/apt/sources.list.d/trivy.list
+        sudo apt-get update
+        sudo apt-get install -y trivy
+
+    # 🔹 4. Build Images (LOCAL)
+    - name: Build Docker Images
+      run: |
+        docker build -t posts-service ./services/posts
+        docker build -t comments-service ./services/comments
+        docker build -t query-service ./services/query
+        docker build -t event-bus-service ./services/event-bus
+
+    # 🔹 5. Scan Images (Trivy)
+    - name: Scan Images with Trivy
+      run: |
+        trivy image posts-service
+        trivy image comments-service
+        trivy image query-service
+        trivy image event-bus-service
+
+    # 🔹 6. Tag Images
+    - name: Tag Images
+      run: |
+        docker tag posts-service ${{ secrets.DOCKER_USERNAME }}/posts-service
+        docker tag comments-service ${{ secrets.DOCKER_USERNAME }}/comments-service
+        docker tag query-service ${{ secrets.DOCKER_USERNAME }}/query-service
+        docker tag event-bus-service ${{ secrets.DOCKER_USERNAME }}/event-bus-service
+
+    # 🔹 7. Push Images
+    - name: Push Images to Docker Hub
+      run: |
         docker push ${{ secrets.DOCKER_USERNAME }}/posts-service
-
-    - name: Build & Push Comments
-      run: |
-        docker build -t ${{ secrets.DOCKER_USERNAME }}/comments-service ./services/comments
         docker push ${{ secrets.DOCKER_USERNAME }}/comments-service
-
-    - name: Build & Push Query
-      run: |
-        docker build -t ${{ secrets.DOCKER_USERNAME }}/query-service ./services/query
         docker push ${{ secrets.DOCKER_USERNAME }}/query-service
-
-    - name: Build & Push Event Bus
-      run: |
-        docker build -t ${{ secrets.DOCKER_USERNAME }}/event-bus-service ./services/event-bus
         docker push ${{ secrets.DOCKER_USERNAME }}/event-bus-service
 
+    # 🔹 8. Deploy to EC2 (K8s)
     - name: Deploy to EC2 via SSH
       uses: appleboy/ssh-action@v0.1.10
       with:
