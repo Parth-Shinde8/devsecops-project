@@ -36,7 +36,14 @@ resource "aws_security_group" "devsecops_sg" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
+  ingress {
+  description = "Kubernetes NodePort Range"
+  from_port   = 30000
+  to_port     = 32767
+  protocol    = "tcp"
 
+  cidr_blocks = ["0.0.0.0/0"]  # or YOUR_IP/32 for better security
+}
   egress {
     from_port   = 0
     to_port     = 0
